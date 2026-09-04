@@ -74,11 +74,11 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "image"
-          image-ref: "ejercicio-docker-audit:trivy"
-          format: "table"
+          scan-type: image
+          image-ref: ejercicio-docker-audit:trivy
+          format: table
           exit-code: "1"
-          severity: "HIGH,CRITICAL"
+          severity: HIGH,CRITICAL
           ignore-unfixed: false
 
   deploy:
@@ -113,20 +113,14 @@ jobs:
           ssh -i ~/.ssh/ec2_key \
             -p "${{ secrets.EC2_SSH_PORT }}" \
             "${{ secrets.EC2_USERNAME }}@${{ secrets.EC2_HOST }}" << 'EOF'
-
-            set -e
-
-            cd "${{ secrets.EC2_PROJECT_PATH }}"
-
-            echo "Actualizando repositorio..."
-            git pull origin main
-
-            echo "Levantando servicios..."
-            docker compose up -d --build
-
-            echo "Estado de los servicios:"
-            docker compose ps
-
+          set -e
+          cd "${{ secrets.EC2_PROJECT_PATH }}"
+          echo "Actualizando repositorio..."
+          git pull origin main
+          echo "Levantando servicios..."
+          docker compose up -d --build
+          echo "Estado de los servicios:"
+          docker compose ps
           EOF
 
       - name: Limpiar clave SSH
