@@ -1,0 +1,10 @@
+__pycache__/
+venv/
+.pytest_cache/
+*.pyc
+.env
+nginx/certs/*.key
+*.log
+.DS_Store
+Thumbs.db
+bandit_report.txt
