@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+.git/
+.github/
+*.md
+bandit_report.txt
+estructura.txt
+informe.md
+reporte.md
+nginx/certs/*.key
+.env
