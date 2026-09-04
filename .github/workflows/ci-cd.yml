@@ -1,4 +1,4 @@
-```yaml
+
 name: CI/CD
 
 on:
@@ -127,4 +127,4 @@ jobs:
         if: always()
         run: |
           rm -f ~/.ssh/ec2_key
-```
+
