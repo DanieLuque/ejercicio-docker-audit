@@ -1,9 +1,16 @@
-FROM python:3.8
+FROM python:3.12-slim
+
 WORKDIR /app
+
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app
 
-RUN pip install Flask==1.1.2 PyMySQL==0.9.3
+RUN groupadd -r appuser && useradd -r -g appuser appuser
+USER appuser
 
-EXPOSE 5050
-CMD ["python", "app.py"]
+EXPOSE 8080
+
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "app:app"]
+ 

@@ -1,0 +1,82 @@
+services:
+  db:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS:-rootpass}
+      MYSQL_DATABASE: ${DB_NAME:-legacydb}
+      MYSQL_USER: ${DB_USER:-user}
+      MYSQL_PASSWORD: ${DB_PASS:-userpass}
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - internal
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -u root -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  api:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - DB_HOST=${DB_HOST:-db}
+      - DB_USER=${DB_USER:-user}
+      - DB_PASS=${DB_PASS:-userpass}
+      - DB_NAME=${DB_NAME:-legacydb}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - internal
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+ 
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    networks:
+      - internal
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  kuma:
+    image: louislam/uptime-kuma:1
+    ports:
+      - "127.0.0.1:3001:3001"
+    volumes:
+      - kuma-data:/app/data
+    networks:
+      - internal
+    restart: unless-stopped
+
+  dozzle:
+    image: amir20/dozzle:latest
+    ports:
+      - "127.0.0.1:8888:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - internal
+    restart: unless-stopped
+
+volumes:
+  kuma-data:
+  db-data:
+
+networks:
+  internal:
