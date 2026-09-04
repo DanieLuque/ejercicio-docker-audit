@@ -1,4 +1,4 @@
-name: CI/CD Pipeline
+name: CI/CD
 
 on:
   push:
@@ -8,9 +8,11 @@ on:
 
 jobs:
   test:
+    name: Pruebas y análisis estático
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -29,58 +31,87 @@ jobs:
       - name: Run bandit
         run: bandit -r . -x ./venv,./__pycache__ -f txt
 
+  build:
+    name: Construir imagen Docker
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ejercicio-docker-audit:ci
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache
+
+  security:
+    name: Análisis de vulnerabilidades
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image for Trivy
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          tags: ejercicio-docker-audit:trivy
+          load: true
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          scan-type: "fs"
-          scan-ref: "."
+          scan-type: "image"
+          image-ref: "ejercicio-docker-audit:trivy"
           format: "table"
           exit-code: "1"
           severity: "HIGH,CRITICAL"
-
-  build-and-push:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to Docker Hub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build and push API image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/ejercicio-docker-audit:latest
-          cache-from: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/ejercicio-docker-audit:buildcache
-          cache-to: type=registry,ref=${{ secrets.DOCKERHUB_USERNAME }}/ejercicio-docker-audit:buildcache,mode=max
+          ignore-unfixed: false
 
   deploy:
-    needs: build-and-push
+    name: Despliegue preparado
     runs-on: ubuntu-latest
+    needs: security
     if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.0.3
+      - name: Verify deployment secrets
+        run: |
+          if [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ]; then
+            echo "::warning::DEPLOY_SSH_KEY no configurado. Saltando despliegue."
+            exit 0
+          fi
+          if [ -z "${{ secrets.DEPLOY_HOST }}" ]; then
+            echo "::warning::DEPLOY_HOST no configurado. Saltando despliegue."
+            exit 0
+          fi
+          if [ -z "${{ secrets.DEPLOY_USER }}" ]; then
+            echo "::warning::DEPLOY_USER no configurado. Saltando despliegue."
+            exit 0
+          fi
+
+      - name: Prepare deployment artifact
+        run: |
+          mkdir -p deploy
+          cp docker-compose.yml deploy/
+          cp .env.example deploy/.env.example
+          cp -r nginx deploy/
+          echo "Artifact prepared for deployment" > deploy/README.txt
+
+      - name: Upload deployment artifact
+        uses: actions/upload-artifact@v4
         with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            cd /opt/app
-            docker-compose pull
-            docker-compose up -d --force-recreate
-            docker system prune -f --filter "until=24h"
+          name: deploy-artifact
+          path: deploy/
+          retention-days: 1
