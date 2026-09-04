@@ -47,13 +47,21 @@ services:
       - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
+      - letsencrypt:/etc/letsencrypt
+      - certbot-challenge:/var/www/certbot
     networks:
       - internal
     restart: unless-stopped
     depends_on:
       api:
         condition: service_healthy
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-challenge:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 1; done'"
 
   kuma:
     image: louislam/uptime-kuma:1
@@ -78,6 +86,8 @@ services:
 volumes:
   kuma-data:
   db-data:
+  letsencrypt:
+  certbot-challenge:
 
 networks:
   internal:
