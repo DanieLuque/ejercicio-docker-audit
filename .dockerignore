@@ -8,4 +8,5 @@ estructura.txt
 informe.md
 reporte.md
 nginx/certs/*.key
+nginx/certbot/
 .env
