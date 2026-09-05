@@ -103,21 +103,45 @@ jobs:
           echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
 
       - name: Trust EC2 host
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::Falta el secret DEPLOY_HOST en GitHub Actions"
+            exit 1
+          fi
           mkdir -p ~/.ssh
-          ssh-keyscan -H "${{ secrets.DEPLOY_HOST }}" >> ~/.ssh/known_hosts
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
       - name: Copy application to EC2
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
+          if [ -z "$DEPLOY_USER" ]; then
+            echo "::error::Falta el secret DEPLOY_USER en GitHub Actions"
+            exit 1
+          fi
+          if [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::Falta el secret DEPLOY_HOST en GitHub Actions"
+            exit 1
+          fi
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.env' \
             --exclude 'nginx/certs' \
-            ./ "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:~/ejercicio-docker-audit/"
+            ./ "$DEPLOY_USER@$DEPLOY_HOST:~/ejercicio-docker-audit/"
 
       - name: Restart services on EC2
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
         run: |
-          ssh "${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}" '
+          if [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_HOST" ]; then
+            echo "::error::Faltan DEPLOY_USER o DEPLOY_HOST en GitHub Actions"
+            exit 1
+          fi
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" '
             set -e
             cd ~/ejercicio-docker-audit
             docker compose pull
