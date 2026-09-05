@@ -104,49 +104,60 @@ jobs:
 
       - name: Trust EC2 host
         env:
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
         run: |
-          if [ -z "$DEPLOY_HOST" ]; then
-            echo "::error::Falta el secret DEPLOY_HOST en GitHub Actions"
+          if [ -z "$EC2_HOST" ]; then
+            echo "::error::Falta el secret EC2_HOST en GitHub Actions"
             exit 1
           fi
+          EC2_SSH_PORT="${EC2_SSH_PORT:-22}"
           mkdir -p ~/.ssh
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -p "$EC2_SSH_PORT" -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
       - name: Copy application to EC2
         env:
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+          EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
         run: |
-          if [ -z "$DEPLOY_USER" ]; then
-            echo "::error::Falta el secret DEPLOY_USER en GitHub Actions"
+          if [ -z "$EC2_USERNAME" ]; then
+            echo "::error::Falta el secret EC2_USERNAME en GitHub Actions"
             exit 1
           fi
-          if [ -z "$DEPLOY_HOST" ]; then
-            echo "::error::Falta el secret DEPLOY_HOST en GitHub Actions"
+          if [ -z "$EC2_HOST" ]; then
+            echo "::error::Falta el secret EC2_HOST en GitHub Actions"
             exit 1
           fi
+          EC2_SSH_PORT="${EC2_SSH_PORT:-22}"
+          EC2_PROJECT_PATH="${EC2_PROJECT_PATH:-/home/$EC2_USERNAME/ejercicio-docker-audit}"
           rsync -az --delete \
             --exclude '.git' \
             --exclude '.env' \
             --exclude 'nginx/certs' \
-            ./ "$DEPLOY_USER@$DEPLOY_HOST:~/ejercicio-docker-audit/"
+            -e "ssh -p $EC2_SSH_PORT" \
+            ./ "$EC2_USERNAME@$EC2_HOST:$EC2_PROJECT_PATH/"
 
       - name: Restart services on EC2
         env:
-          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_PORT: ${{ secrets.EC2_SSH_PORT }}
+          EC2_PROJECT_PATH: ${{ secrets.EC2_PROJECT_PATH }}
         run: |
-          if [ -z "$DEPLOY_USER" ] || [ -z "$DEPLOY_HOST" ]; then
-            echo "::error::Faltan DEPLOY_USER o DEPLOY_HOST en GitHub Actions"
+          if [ -z "$EC2_USERNAME" ] || [ -z "$EC2_HOST" ]; then
+            echo "::error::Faltan EC2_USERNAME o EC2_HOST en GitHub Actions"
             exit 1
           fi
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" '
+          EC2_SSH_PORT="${EC2_SSH_PORT:-22}"
+          EC2_PROJECT_PATH="${EC2_PROJECT_PATH:-/home/$EC2_USERNAME/ejercicio-docker-audit}"
+          ssh -p "$EC2_SSH_PORT" "$EC2_USERNAME@$EC2_HOST" "
             set -e
-            cd ~/ejercicio-docker-audit
+            cd '$EC2_PROJECT_PATH'
             docker compose pull
             docker compose build api
             docker compose up -d
             docker compose exec -T nginx nginx -t
             docker compose ps
-          '
+          "
