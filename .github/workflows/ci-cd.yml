@@ -88,10 +88,10 @@ jobs:
 
       - name: Configure SSH
         env:
-          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KEY_B64: ${{ secrets.DEPLOY_SSH_KEY_B64 }}
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          printf '%s' "$DEPLOY_SSH_KEY_B64" | base64 --decode > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           eval "$(ssh-agent -s)"
           ssh-add ~/.ssh/deploy_key
